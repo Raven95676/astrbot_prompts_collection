@@ -53,14 +53,18 @@ class JoestarMarket:
                 owner_info: dict[str, Any] = prompt_data.get("owner", {})
                 author_name: str = owner_info.get("username", "匿名用户")
 
-                tags_list: list[str] = [tag["name"] for tag in prompt_data.get("tags", [])]
+                tags_list: list[str] = [
+                    tag["name"] for tag in prompt_data.get("tags", [])
+                ]
 
-                all_extracted_prompts.append({
-                    "title": title,
-                    "author": author_name,
-                    "tags": tags_list,
-                    "content": content,
-                })
+                all_extracted_prompts.append(
+                    {
+                        "title": title,
+                        "author": author_name,
+                        "tags": tags_list,
+                        "content": content,
+                    }
+                )
 
             current_skip += 16
             time.sleep(0.3)
@@ -96,7 +100,7 @@ class VmoranvMarket:
         for prompt_data in prompts_data:
             if not isinstance(prompt_data, dict):
                 continue
-            
+
             if prompt_data.get("status") != "published":
                 continue
 
@@ -106,12 +110,14 @@ class VmoranvMarket:
             author_name: str = author_info.get("name", "匿名用户")
             tags_list: list[str] = prompt_data.get("tags", [])
 
-            all_extracted_prompts.append({
-                "title": title,
-                "author": author_name,
-                "tags": tags_list,
-                "content": content,
-            })
+            all_extracted_prompts.append(
+                {
+                    "title": title,
+                    "author": author_name,
+                    "tags": tags_list,
+                    "content": content,
+                }
+            )
 
         print(f"VmoranvMarket获取完成，共 {len(all_extracted_prompts)} 条提示词")
         return all_extracted_prompts
@@ -210,60 +216,55 @@ class ContentModerator:
 
 
 if __name__ == "__main__":
+    os.makedirs("public", exist_ok=True)
     joestar_market = JoestarMarket()
     vmoranv_market = VmoranvMarket()
     moderator = ContentModerator()
     cleaned_prompts = set()
-    compliant_prompts = []
+    existing_prompts = set()
 
-    def clean_text(text: str) -> str:
-        return "".join(text.split())
+    def clean_text(text: str | dict) -> str:
+        return "".join(str(text).split())
+
+    output_file = "public/prompts.json"
+    if os.path.exists(output_file):
+        print("读取现有提示词文件...")
+        try:
+            with open(output_file, "r", encoding="utf-8") as f:
+                existing_prompts_a = json.load(f)
+                for prompt in existing_prompts_a:
+                    existing_prompts.add(clean_text(prompt))
+            print(f"已读取 {len(existing_prompts)} 条现有提示词")
+        except Exception as e:
+            print(f"读取现有提示词文件失败: {e!s}")
 
     all_prompts = []
     all_prompts.extend(joestar_market.get_prompts())
     all_prompts.extend(vmoranv_market.get_prompts())
-    
+
     print(f"总共获取到 {len(all_prompts)} 条提示词")
 
+    compliant_prompts = []
     for prompt in all_prompts:
-        clean_title = clean_text(prompt["title"])
-        clean_author = clean_text(prompt["author"])
-        clean_content = clean_text(prompt["content"])
-        
+        clean_content = clean_text(str(prompt))
+
         if clean_content in cleaned_prompts:
-            print(f"{clean_title}: 内容重复，跳过")
+            print(f"{prompt['title']}: 重复，跳过")
+            continue
+        if clean_content in existing_prompts:
+            print(f"{prompt['title']}: 已存在，跳过")
+            compliant_prompts.append(prompt)
             continue
         cleaned_prompts.add(clean_content)
-        
-        checks = [
-            (clean_title, "标题"),
-            (clean_author, "作者"),
-            (clean_content, "内容")
-        ]
-        
-        is_compliant = True
-        for text, type_name in checks:
-            if not moderator.check_text(text):
-                print(f"{clean_title}: {type_name}不合规")
-                is_compliant = False
-                break
-        
-        if not is_compliant:
-            continue
 
-        compliant_tags = []
-        for tag in prompt["tags"]:
-            clean_tag = clean_text(tag)
-            if moderator.check_text(clean_tag):
-                compliant_tags.append(tag)
-            else:
-                print(f"标签不合规: {tag}")
-        prompt["tags"] = compliant_tags
+        if not moderator.check_text(clean_content):
+            print(f"{prompt['title']}: 内容不合规，跳过")
+            continue
 
         compliant_prompts.append(prompt)
 
-    output_file = "public/prompts.json"
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(compliant_prompts, f, ensure_ascii=False, indent=2)
-    
-    print(f"完成，合规提示词共 {len(compliant_prompts)} 条，已保存至 {output_file}")
+    if len(compliant_prompts) != 0:
+        with open(output_file, "w", encoding="utf-8") as f:
+            json.dump(compliant_prompts, f, ensure_ascii=False, indent=2)
+
+    print(f"完成，合规提示词共 {len(compliant_prompts)} 条")

@@ -42,7 +42,7 @@ jobs:
 
           if [[ $(git status --porcelain) ]]; then
             echo "Changes detected. Proceeding to commit and push."
-            git commit -m "Update Info"
+            git commit -m "Update Prompts"
             git push
           else
             echo "No changes detected. Skipping commit and push."
