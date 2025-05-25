@@ -52,6 +52,9 @@ class JoestarMarket:
                 content: str = prompt_data.get("content", "无内容")
                 owner_info: dict[str, Any] = prompt_data.get("owner", {})
                 author_name: str = owner_info.get("username", "匿名用户")
+                prompt_hash = hashlib.sha256(
+                    clean_text(content).encode("utf-8")
+                ).hexdigest()
 
                 tags_list: list[str] = [
                     tag["name"] for tag in prompt_data.get("tags", [])
@@ -63,6 +66,7 @@ class JoestarMarket:
                         "author": author_name,
                         "tags": tags_list,
                         "content": content,
+                        "hash": prompt_hash,
                     }
                 )
 
@@ -109,6 +113,9 @@ class VmoranvMarket:
             author_info: dict[str, Any] = prompt_data.get("author", {})
             author_name: str = author_info.get("name", "匿名用户")
             tags_list: list[str] = prompt_data.get("tags", [])
+            prompt_hash = hashlib.sha256(
+                clean_text(content).encode("utf-8")
+            ).hexdigest()
 
             all_extracted_prompts.append(
                 {
@@ -116,6 +123,7 @@ class VmoranvMarket:
                     "author": author_name,
                     "tags": tags_list,
                     "content": content,
+                    "hash": prompt_hash,
                 }
             )
 
@@ -215,6 +223,10 @@ class ContentModerator:
             return False
 
 
+def clean_text(text: str | dict) -> str:
+    return "".join(str(text).split())
+
+
 if __name__ == "__main__":
     os.makedirs("public", exist_ok=True)
     joestar_market = JoestarMarket()
@@ -222,21 +234,34 @@ if __name__ == "__main__":
     moderator = ContentModerator()
     cleaned_prompts = set()
     existing_prompts = set()
-
-    def clean_text(text: str | dict) -> str:
-        return "".join(str(text).split())
+    blacklist = set()
 
     output_file = "public/prompts.json"
+    blacklist_file = "blacklist.txt"
+
     if os.path.exists(output_file):
         print("读取现有提示词文件...")
         try:
             with open(output_file, "r", encoding="utf-8") as f:
                 existing_prompts_a = json.load(f)
                 for prompt in existing_prompts_a:
-                    existing_prompts.add(clean_text(prompt))
+                    existing_prompts.add(
+                        clean_text(
+                            f"{prompt['title']}{prompt['author']}{prompt['tags']}{prompt['content']}"
+                        )
+                    )
             print(f"已读取 {len(existing_prompts)} 条现有提示词")
         except Exception as e:
             print(f"读取现有提示词文件失败: {e!s}")
+
+    try:
+        with open(blacklist_file, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip() and not line.startswith("#"):
+                    blacklist.add(line.strip())
+        print(f"已读取 {len(blacklist)} 条黑名单")
+    except Exception as e:
+        print(f"读取黑名单文件失败: {e!s}")
 
     all_prompts = []
     all_prompts.extend(joestar_market.get_prompts())
@@ -246,7 +271,14 @@ if __name__ == "__main__":
 
     compliant_prompts = []
     for prompt in all_prompts:
-        clean_content = clean_text(str(prompt))
+        clean_content = clean_text(
+            f"{prompt['title']}{prompt['author']}{prompt['tags']}{prompt['content']}"
+        )
+        prompt_hash = hashlib.sha256(clean_text(prompt['content']).encode("utf-8")).hexdigest()
+        
+        if prompt_hash in blacklist:
+            print(f"{prompt['title']}: 在黑名单中，跳过")
+            continue
 
         if clean_content in cleaned_prompts:
             print(f"{prompt['title']}: 重复，跳过")
@@ -266,5 +298,20 @@ if __name__ == "__main__":
     if len(compliant_prompts) != 0:
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(compliant_prompts, f, ensure_ascii=False, indent=2)
+
+        unique_authors = {prompt["author"] for prompt in compliant_prompts}
+        all_tags = [tag for prompt in compliant_prompts for tag in prompt["tags"]]
+        unique_tags = {tag for tag in all_tags}
+
+        stats = {
+            "total_prompts": len(compliant_prompts),
+            "total_authors": len(unique_authors),
+            "total_tags": len(unique_tags),
+            "tag_frequency": {tag: all_tags.count(tag) for tag in unique_tags},
+            "last_updated": datetime.timestamp(datetime.now()),
+        }
+
+        with open("public/info.json", "w", encoding="utf-8") as f:
+            json.dump(stats, f, ensure_ascii=False, indent=2)
 
     print(f"完成，合规提示词共 {len(compliant_prompts)} 条")
