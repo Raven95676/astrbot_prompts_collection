@@ -236,8 +236,8 @@
         async function loadData() {
             try {
                 const [promptsResponse, infoResponse] = await Promise.all([
-                    fetch('https://raw.githubusercontent.com/Raven95676/astrobot_prompts_collection/refs/heads/main/public/prompts.json'),
-                    fetch('https://raw.githubusercontent.com/Raven95676/astrobot_prompts_collection/refs/heads/main/public/info.json')
+                    fetch('https://prompts.ravenote.me/prompts.json'),
+                    fetch('https://prompts.ravenote.me/info.json')
                 ]);
                 
                 prompts = await promptsResponse.json();
