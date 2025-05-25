@@ -15,6 +15,7 @@ import requests
 JOESTAR_API_URL = "http://www.jasongjz.top:8000/api/v1/prompts/"
 VMORANV_API_URL = "https://prompt.614447.xyz/api/prompts"
 ALIYUN_ENDPOINT = "https://green-cip.cn-shanghai.aliyuncs.com"
+WENTURC_API_URL = "https://apii.wenturc.com/api/prompts"
 REQUEST_TIMEOUT = 10
 TEXT_CHUNK_SIZE = 600
 SLEEP_INTERVAL = 0.3
@@ -80,14 +81,14 @@ class JoestarMarket:
         if author_name == "default_user":
             author_name = "匿名用户"
         tags_list: list[str] = [tag["name"] for tag in prompt_data.get("tags", [])]
-        prompt_hash = get_hash(content)
+        content_hash = get_hash(content)
 
         return {
             "title": title,
             "author": author_name,
             "tags": tags_list,
             "content": content,
-            "hash": prompt_hash,
+            "hash": content_hash,
         }
 
 
@@ -136,14 +137,64 @@ class VmoranvMarket:
         author_info: dict[str, Any] = prompt_data.get("author", {})
         author_name: str = author_info.get("name", "匿名用户")
         tags_list: list[str] = prompt_data.get("tags", [])
-        prompt_hash = get_hash(content)
+        content_hash = get_hash(content)
 
         return {
             "title": title,
             "author": author_name,
             "tags": tags_list,
             "content": content,
-            "hash": prompt_hash,
+            "hash": content_hash,
+        }
+
+
+class WenturcMarket:
+    @staticmethod
+    def _fetch_all() -> list[dict[str, Any]] | None:
+        try:
+            response = requests.get(
+                WENTURC_API_URL,
+                timeout=REQUEST_TIMEOUT,
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            print(f"获取WenturcMarket数据失败: {e!s}")
+            return None
+
+    def get_prompts(self) -> list[dict[str, Any]]:
+        all_extracted_prompts: list[dict[str, Any]] = []
+
+        print("开始获取 WenturcMarket prompts...")
+        prompts_data = self._fetch_all()
+
+        for prompt_data in prompts_data:
+            if not isinstance(prompt_data, dict):
+                continue
+
+            prompt = self._extract_prompt_data(prompt_data)
+            all_extracted_prompts.append(prompt)
+
+        print(f"WenturcMarket获取完成，共 {len(all_extracted_prompts)} 条提示词")
+        return all_extracted_prompts
+
+    @staticmethod
+    def _extract_prompt_data(prompt_data: dict[str, Any]) -> dict[str, Any]:
+        title: str = prompt_data.get("title", "无标题")
+        content: str = prompt_data.get("content", "无内容")
+        author_name: str = prompt_data.get("author", "匿名用户")
+
+        category: str | None = prompt_data.get("category")
+        tags_list: list[str] = [category] if category else []
+
+        content_hash = get_hash(content)
+
+        return {
+            "title": title,
+            "author": author_name,
+            "tags": tags_list,
+            "content": content,
+            "hash": content_hash,
         }
 
 
@@ -270,7 +321,12 @@ def load_existing_prompts(file_path: str) -> set[str]:
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             existing_prompts_data = json.load(f)
-            return {get_hash(prompt["content"]) for prompt in existing_prompts_data}
+            return {
+                get_hash(
+                    f"{prompt['title']}{prompt['author']}{prompt['tags']}{prompt['content']}"
+                )
+                for prompt in existing_prompts_data
+            }
     except Exception as e:
         print(f"读取现有提示词文件失败: {e!s}")
         return set()
@@ -303,16 +359,19 @@ def process_prompts(
 
     for prompt in all_prompts:
         clean_content = clean_text(prompt["content"])
-        prompt_hash = get_hash(clean_content)
+        content_hash = get_hash(clean_content)
+        prompt_hash = get_hash(
+            f"{prompt['title']}{prompt['author']}{prompt['tags']}{prompt['content']}"
+        )
 
         # 检查黑名单
-        if prompt_hash in blacklist:
+        if content_hash in blacklist:
             print(f"{prompt['title']}: 在黑名单中，跳过")
             continue
 
         # 检查重复
-        if prompt_hash in cleaned_prompts:
-            existing_prompt = cleaned_prompts[prompt_hash]
+        if content_hash in cleaned_prompts:
+            existing_prompt = cleaned_prompts[content_hash]
 
             if (
                 existing_prompt["author"] == "匿名用户"
@@ -327,7 +386,7 @@ def process_prompts(
 
             print(f"{prompt['title']}: 重复")
             continue
-        cleaned_prompts[prompt_hash] = prompt
+        cleaned_prompts[content_hash] = prompt
 
         # 检查是否已存在
         if prompt_hash in existing_prompts:
@@ -382,6 +441,7 @@ def main() -> None:
     # 初始化组件
     joestar_market = JoestarMarket()
     vmoranv_market = VmoranvMarket()
+    wenturc_market = WenturcMarket()
     moderator = ContentModerator()
 
     # 加载现有数据
@@ -395,6 +455,7 @@ def main() -> None:
     all_prompts = []
     all_prompts.extend(joestar_market.get_prompts())
     all_prompts.extend(vmoranv_market.get_prompts())
+    all_prompts.extend(wenturc_market.get_prompts())
 
     print(f"总共获取到 {len(all_prompts)} 条提示词")
 
