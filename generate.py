@@ -12,7 +12,7 @@ from urllib.parse import quote_plus
 import requests
 
 # Configuration constants
-JOESTAR_API_URL = "http://www.jasongjz.top:8000/api/v1/prompts/"
+JOESTAR_API_URL = "https://www.jasongjz.top/api/v1/prompts/"
 VMORANV_API_URL = "https://prompt.614447.xyz/api/prompts"
 ALIYUN_ENDPOINT = "https://green-cip.cn-shanghai.aliyuncs.com"
 WENTURC_API_URL = "https://apii.wenturc.com/api/prompts"
