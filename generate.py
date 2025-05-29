@@ -94,10 +94,14 @@ class JoestarMarket:
 
 class VmoranvMarket:
     @staticmethod
-    def _fetch_all() -> dict[str, Any] | None:
+    def _fetch_page(page: int) -> dict[str, Any] | None:
+        params = {
+            "page": page,
+        }
         try:
             response = requests.get(
                 VMORANV_API_URL,
+                params=params,
                 timeout=REQUEST_TIMEOUT,
             )
             response.raise_for_status()
@@ -108,24 +112,34 @@ class VmoranvMarket:
 
     def get_prompts(self) -> list[dict[str, Any]]:
         all_extracted_prompts: list[dict[str, Any]] = []
+        current_page = 1
 
         print("开始获取 VmoranvMarket prompts...")
-        response_data = self._fetch_all()
 
-        if not response_data:
-            return all_extracted_prompts
+        while True:
+            response_data = self._fetch_page(current_page)
+            
+            if not response_data:
+                break
 
-        prompts_data = response_data.get("data", [])
+            prompts_data = response_data.get("data", [])
 
-        for prompt_data in prompts_data:
-            if not isinstance(prompt_data, dict):
-                continue
+            for prompt_data in prompts_data:
+                if not isinstance(prompt_data, dict):
+                    continue
 
-            if prompt_data.get("status") != "published":
-                continue
+                if prompt_data.get("status") != "published":
+                    continue
 
-            prompt = self._extract_prompt_data(prompt_data)
-            all_extracted_prompts.append(prompt)
+                prompt = self._extract_prompt_data(prompt_data)
+                all_extracted_prompts.append(prompt)
+
+            pagination = response_data.get("pagination", {})
+            if not pagination.get("hasMore", False):
+                break
+
+            current_page += 1
+            time.sleep(SLEEP_INTERVAL)
 
         print(f"VmoranvMarket获取完成，共 {len(all_extracted_prompts)} 条提示词")
         return all_extracted_prompts
