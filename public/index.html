@@ -268,9 +268,9 @@
                     `<span class="badge bg-secondary tag-badge">${tag}</span>`
                 ).join('');
                 
-                const contentPreview = prompt.content.length > 200 
-                    ? prompt.content.substring(0, 200) + '...'
-                    : prompt.content;
+                const contentPreview = decodeHTMLEntities(prompt.content).length > 200 
+                    ? decodeHTMLEntities(prompt.content).substring(0, 200) + '...'
+                    : decodeHTMLEntities(prompt.content);
                 
                 col.innerHTML = `
                     <div class="card prompt-card">
@@ -409,7 +409,7 @@
                 // 填充模态框内容
                 document.getElementById('modalTitle').textContent = prompt.title;
                 document.getElementById('modalAuthor').textContent = prompt.author;
-                document.getElementById('modalContent').textContent = prompt.content;
+                document.getElementById('modalContent').textContent = decodeHTMLEntities(prompt.content);
                 
                 // 渲染标签 - 只在有标签时显示
                 const tagsContainer = document.getElementById('modalTags');
@@ -429,10 +429,11 @@
             }
         }
 
+        // 复制功能
         function copyPrompt(hash) {
             const prompt = prompts.find(p => p.hash === hash);
             if (prompt) {
-                navigator.clipboard.writeText(prompt.content).then(() => {
+                navigator.clipboard.writeText(decodeHTMLEntities(prompt.content)).then(() => {
                     // 创建一个临时的提示元素
                     const toast = document.createElement('div');
                     toast.className = 'toast align-items-center text-white bg-success border-0 position-fixed';
@@ -461,7 +462,7 @@
 
         function copyModalPrompt(btnElement) {
             if (currentPrompt) {
-                navigator.clipboard.writeText(currentPrompt.content).then(() => {
+                navigator.clipboard.writeText(decodeHTMLEntities(currentPrompt.content)).then(() => {
                     // 更新按钮文本
                     const originalText = btnElement.innerHTML;
                     btnElement.innerHTML = '<i class="bi bi-check"></i> 已复制';
@@ -480,6 +481,13 @@
                     alert('复制失败，请手动复制。');
                 });
             }
+        }
+
+        // HTML 实体解码函数
+        function decodeHTMLEntities(text) {
+            const textarea = document.createElement('textarea');
+            textarea.innerHTML = text;
+            return textarea.value;
         }
 
         // 页面加载完成后初始化
