@@ -197,7 +197,7 @@ class WenturcMarket:
     def _extract_prompt_data(prompt_data: dict[str, Any]) -> dict[str, Any]:
         title: str = nh3.clean(prompt_data.get("title", "无标题"))
         content: str = nh3.clean(prompt_data.get("content", "无内容"))
-        author_name: str = nh3.clean(rompt_data.get("author", "匿名用户"))
+        author_name: str = nh3.clean(prompt_data.get("author", "匿名用户"))
 
         category: str | None = nh3.clean(prompt_data.get("category"))
         tags_list: list[str] = [category] if category else []
