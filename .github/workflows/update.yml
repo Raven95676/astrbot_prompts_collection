@@ -26,6 +26,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install requests
+          pip install nh3
 
       - name: Run script
         run: |
